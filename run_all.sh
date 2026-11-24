@@ -19,6 +19,8 @@ mkdir -p "$RES"
 trap 'kill $PIDS 2>/dev/null || true' EXIT
 
 die()  { echo "run_all.sh: $*" >&2; exit 1; }
+# as root the sandbox drops every capability, so it cannot even read the work folder; and Strata must not get root
+[ "$(id -u)" != 0 ] || die "do not run as root or with sudo; run as your own user"
 note() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$RES/status.tsv"; echo "== $1: $2 ($3)"; }  # report.py reads the last line per engine
 last_line() { tail -n 1 "$1" | tr '\t|' '  ' | cut -c1-200; }
 # config values end up in shell and JSON text, so only plain characters are allowed
