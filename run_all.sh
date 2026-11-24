@@ -15,8 +15,16 @@ set -a; . ./config.env; set +a
 RES=$HERE/results
 IMAGE=strata-bench:local
 PIDS=""
+CT_NAME=strata-bench-$$
 mkdir -p "$RES"
-trap 'kill $PIDS 2>/dev/null || true' EXIT
+# Ctrl-C: the sandbox's own shell does not pass the signal on to the compile or download, so the container is removed by
+# name, which kills everything in it. Long commands run through with_beat, where bash can act on the signal at once.
+cleanup() {
+  kill $PIDS 2>/dev/null || true
+  case ${RUNTIME:-} in docker|podman) "$RUNTIME" rm -f "$CT_NAME" >/dev/null 2>&1 || true ;; esac
+}
+trap cleanup EXIT
+trap 'echo "run_all.sh: stopped" >&2; exit 130' INT TERM
 
 die()  { echo "run_all.sh: $*" >&2; exit 1; }
 # as root the sandbox drops every capability, so it cannot even read the work folder; and Strata must not get root
@@ -35,10 +43,13 @@ beat() {
   done
 }
 with_beat() {  # with_beat <log> <command...>
-  local rc=0 b
+  local rc=0 b c
   beat "$1" & b=$!
   shift
-  "$@" || rc=$?
+  # in the background, then wait: bash runs the Ctrl-C trap during a wait, but not while a foreground command runs
+  "$@" & c=$!
+  PIDS="$PIDS $b $c"
+  wait "$c" || rc=$?
   kill "$b" 2>/dev/null || true
   return "$rc"
 }
@@ -177,7 +188,7 @@ ct() {  # run a command in the sandbox. CT_EXEC=exec replaces the calling (backg
         gpu=(--device nvidia.com/gpu=all); user=(--userns=keep-id); lim=(--ulimit host)
       fi
       # host network: the server binds 127.0.0.1 only, and the build needs to download. No capabilities, no new privileges.
-      ${CT_EXEC:-} "$RUNTIME" run --rm --init "${gpu[@]}" "${user[@]}" "${lim[@]}" --network host --cap-drop ALL \
+      ${CT_EXEC:-} "$RUNTIME" run --rm --init --name "$CT_NAME" "${gpu[@]}" "${user[@]}" "${lim[@]}" --network host --cap-drop ALL \
         --security-opt no-new-privileges --security-opt label=disable --shm-size 2g -e HOME=/work/home \
         -v "$WORK:/work" -v "$DATA_DIR/models:/data" -w /work "$IMAGE" "$@" ;;
     apptainer)
@@ -234,6 +245,7 @@ EOF
   step "strata: start the server and load the model (log: results/strata_server.log)"
   t0=$(date +%s)
   beat "$RES/strata_server.log" & local b=$!
+  PIDS="$PIDS $b"
   CT_EXEC="exec" ct sh "/work/Strata/terminal/$(basename "$run")" > "$RES/strata_server.log" 2>&1 &
   pid=$!
   PIDS="$PIDS $pid"
