@@ -1,0 +1,7 @@
+[project]
+name = "strata-basalt"
+version = "0.1.0"
+description = "Sandboxed benchmark of the Strata and Basalt LLM inference engines against Ollama on a GPU node"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = []
