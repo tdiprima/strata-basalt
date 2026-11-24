@@ -1,10 +1,10 @@
 # Strata / Basalt test
 
-Benchmarks Strata against Ollama on a GPU node and writes a result for the boss.
+Benchmarks Strata against Ollama on a GPU node and writes a short result report.
 
 ## Steps
 
-1. On your Mac, copy this folder to the hopper node.
+1. On your own machine, copy this folder to the GPU node.
 
    ```sh
    ./push.sh
@@ -34,7 +34,7 @@ Benchmarks Strata against Ollama on a GPU node and writes a result for the boss.
    cat results/REPORT.md
    ```
 
-5. Send `results/REPORT.md` to the boss.
+5. Share `results/REPORT.md`.
 
 ## If something fails
 
@@ -45,7 +45,7 @@ Benchmarks Strata against Ollama on a GPU node and writes a result for the boss.
 
 ## Rules
 
-- Keep credentials and patient data out of the data folder the script prints. Strata is untrusted code and can read that folder.
+- Keep credentials and sensitive data out of the data folder the script prints. Strata is untrusted code and can read that folder.
 - Needs on the node: `nvidia-smi`, `python3`, `curl`, and one of `docker`, `podman` or `apptainer`.
 
 ## Clean up

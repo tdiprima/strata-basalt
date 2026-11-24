@@ -4,12 +4,12 @@ A one-command, sandboxed benchmark that checks whether the Strata and Basalt LLM
 
 ## Speed claims nobody has checked
 
-A hospital research group runs a ~100B-parameter model in-house at 5 to 8 tokens per second. Faster inference means more clinical free text and OCR output processed without sending data off-site. Two new engines promise a large speed-up:
+Large open models run slowly on self-hosted GPU nodes, and faster inference means more sensitive text processed without sending data off-site. Two new engines promise a large speed-up:
 
 - **Strata** spreads a large mixture-of-experts model across GPU memory, system RAM and SSD.
 - **Basalt**, a Strata fork, claims up to 2.6x Strata's speed.
 
-Every one of those numbers is self-reported by the authors. No independent benchmark exists. Both projects are unreviewed third-party code, upstream has never tested the hardware in question, and a test run needs downloads of about 111 GB each. Deciding by reading READMEs is guesswork, and running unknown code on a node near patient data is a risk.
+Every one of those numbers is self-reported by the authors. No independent benchmark exists. Both projects are unreviewed third-party code, upstream has never tested the hardware in question, and a test run needs downloads of about 111 GB each. Deciding by reading READMEs is guesswork, and running unknown code on a node near sensitive data is a risk.
 
 ## A measured answer from one script
 
@@ -45,7 +45,7 @@ ollama long_lookup r0: ttft … s, … tok/s, score …
 The run ends by printing `results/REPORT.md`, which has this layout (values elided here, since they depend on your node):
 
 ```markdown
-# Strata and Basalt on the hopper node: result
+# Strata and Basalt on this GPU node: result
 
 ## Node
 CPU architecture, CUDA version, GPU model, VRAM, driver, compute capability
@@ -139,7 +139,7 @@ An optional bearer token for the endpoint is read from the `BENCH_API_KEY` envir
 
 ### Safety and clean-up
 
-Keep credentials and patient data out of the data folder the script prints at the start. Strata is untrusted code and can read that folder.
+Keep credentials and sensitive data out of the data folder the script prints at the start. Strata is untrusted code and can read that folder.
 
 Delete the data folder when done:
 

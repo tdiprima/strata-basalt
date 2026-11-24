@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
-# Copy this folder to the hopper node, as ~/strata-basalt there.
+# Copy this folder to the GPU node, as ~/strata-basalt there.
 #   ./push.sh          # to the "lala" host of ~/.ssh/config
-#   ./push.sh nexus    # to another host
+#   ./push.sh <host>   # to another host
 set -euo pipefail
 cd "$(dirname "$0")"
 host=${1:-lala}

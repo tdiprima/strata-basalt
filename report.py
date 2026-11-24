@@ -58,7 +58,7 @@ def recommend(sums, status):
         return (f"Strata is {ratio:.2f}x as fast as Ollama but its extraction accuracy is lower "
                 f"({fmt(strata['score'], 2)} against {fmt(base['score'], 2)}). Not recommended without a quality review.")
     return (f"Strata is {ratio:.2f}x as fast as Ollama on the same model with matching extraction accuracy. "
-            "Worth a pilot on non-clinical text. Upstream has not tested this hardware, so pin the commit.")
+            "Worth a pilot on non-sensitive text. Upstream has not tested this hardware, so pin the commit.")
 
 
 def main(d):
@@ -72,7 +72,7 @@ def main(d):
             if len(row) == 3:
                 status[row[0]] = (row[1], row[2])   # the last line for an engine wins
     sums = {n: summarize(b) for n, b in benches.items()}
-    out = ["# Strata and Basalt on the hopper node: result", ""]
+    out = ["# Strata and Basalt on this GPU node: result", ""]
     gpu = os.path.join(d, "gpu.csv")
     if os.path.exists(gpu):
         out += ["## Node", "", "```", open(gpu, encoding="utf-8").read().strip(), "```", ""]
@@ -95,7 +95,7 @@ def main(d):
         out.append("| (no engine produced numbers) | | | | | | | | | | |")
     out += ["", "## Recommendation", "", recommend(sums, status), "",
             "Speed claims by the Strata and Basalt authors are self-reported. The numbers above are the only ones "
-            "measured on our hardware.", ""]
+            "measured on this hardware.", ""]
     text = "\n".join(out)
     with open(os.path.join(d, "REPORT.md"), "w", encoding="utf-8") as f:
         f.write(text)

@@ -7,7 +7,7 @@
 # Nothing to set: it picks the disk, the container runtime and the model size, and downloads the model for both
 # engines. config.env only holds overrides. Strata is untrusted code: it is cloned, built and run only inside
 # a container, as your own non-root user, with nothing mounted except a work folder and the model folder.
-# Do not put credentials or patient data under the data folder it prints.
+# Do not put credentials or sensitive data under the data folder it prints.
 set -euo pipefail
 cd "$(dirname "$0")"
 HERE=$PWD
