@@ -22,6 +22,7 @@ mkdir -p "$RES"
 cleanup() {
   kill $PIDS 2>/dev/null || true
   case ${RUNTIME:-} in docker|podman) "$RUNTIME" rm -f "$CT_NAME" >/dev/null 2>&1 || true ;; esac
+  echo "total time: $(( SECONDS / 3600 )) h $(( SECONDS % 3600 / 60 )) min"
 }
 trap cleanup EXIT
 trap 'echo "run_all.sh: stopped" >&2; exit 130' INT TERM
