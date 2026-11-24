@@ -7,7 +7,7 @@
 # Nothing to set: it picks the disk, the container runtime and the model size, and downloads the model for both
 # engines. config.env only holds overrides. Strata is untrusted code: it is cloned, built and run only inside
 # a container, as your own non-root user, with nothing mounted except a work folder and the model folder.
-# Do not put credentials or sensitive data under the data folder it prints.
+# Do not put credentials or patient data under the data folder it prints.
 set -euo pipefail
 cd "$(dirname "$0")"
 HERE=$PWD
@@ -99,7 +99,7 @@ preflight() {
 }
 
 # ------------------------------------------------------------------------------------------------ 2. Ollama
-ollama_api() { curl -fsS -m "${3:-60}" "$OLLAMA_URL/api/$1" -d "$2"; }
+ollama_api() { curl -sS --fail-with-body -m "${3:-60}" "$OLLAMA_URL/api/$1" -d "$2"; }  # body kept: it holds Ollama's reason
 
 ollama_bench() {  # ollama_bench <label> <model>
   local name=$1 model=$2 t0 load store free
@@ -118,7 +118,7 @@ ollama_bench() {  # ollama_bench <label> <model>
   fi
   echo "pulling $model (a no-op when it is already there) ..."
   ollama_api pull "{\"model\":\"$model\",\"stream\":false}" 86400 > "$RES/ollama_pull_$name.json" \
-    || { note "$name" "failed" "Ollama could not pull $model"; return 0; }
+    || { note "$name" "failed" "Ollama could not pull $model: $(last_line "$RES/ollama_pull_$name.json")"; return 0; }
   ollama_api generate "{\"model\":\"$model\",\"keep_alive\":0}" >/dev/null || true   # unload, so the load is timed
   t0=$(date +%s)
   ollama_api generate "{\"model\":\"$model\"}" 3600 >/dev/null \
@@ -179,7 +179,7 @@ strata_step() {
     docker|podman) "$RUNTIME" build -t "$IMAGE" - < Dockerfile ;;
     apptainer)     [ -f "$WORK/strata.sif" ] || apptainer build --fakeroot "$WORK/strata.sif" strata.def ;;
     *) die "no container runtime found (docker, podman or apptainer); Strata is not run outside a container" ;;
-  esac
+  esac || { note strata "failed" "$RUNTIME could not build the sandbox image; see the output above"; return 0; }
 
   # Runs inside the container. Upstream tested its arm64 build on the DGX Spark (sm_121) only; ARCHS aims it at this GPU.
   cat > "$WORK/steps.sh" <<EOF
