@@ -23,6 +23,25 @@ die()  { echo "run_all.sh: $*" >&2; exit 1; }
 [ "$(id -u)" != 0 ] || die "do not run as root or with sudo; run as your own user"
 note() { printf '%s\t%s\t%s\n' "$1" "$2" "$3" >> "$RES/status.tsv"; echo "== $1: $2 ($3)"; }  # report.py reads the last line per engine
 last_line() { tail -n 1 "$1" | tr '\t|' '  ' | cut -c1-200; }
+# progress: step prints "[n/total time] what"; beat repeats the time and a log's newest line every minute of a long wait
+N=0
+exec 3>&1   # beat writes here, so it still reaches the screen when the command it watches is redirected into a log
+step() { N=$(( N + 1 )); echo "[$N/$TOTAL $(date +%H:%M:%S)] $*"; }
+stage() { local end=$(( N + $1 )); shift; "$@"; N=$end; }  # a stage that stops early still uses up its step numbers
+beat() {
+  local t0; t0=$(date +%s)
+  while sleep 60; do
+    echo "      $(( ($(date +%s) - t0) / 60 )) min: $(tail -c 2000 "$1" 2>/dev/null | tr '\r' '\n' | grep . | tail -n 1 | cut -c1-150)" >&3
+  done
+}
+with_beat() {  # with_beat <log> <command...>
+  local rc=0 b
+  beat "$1" & b=$!
+  shift
+  "$@" || rc=$?
+  kill "$b" 2>/dev/null || true
+  return "$rc"
+}
 # config values end up in shell and JSON text, so only plain characters are allowed
 check() { [[ "$2" =~ $3 ]] || die "config.env: $1 has an unexpected value: $2"; }
 check STRATA_REPO "$STRATA_REPO" '^https://github\.com/[A-Za-z0-9._/-]+$'
@@ -118,14 +137,16 @@ ollama_bench() {  # ollama_bench <label> <model>
       fi
     done
   fi
-  echo "pulling $model (a no-op when it is already there) ..."
-  ollama_api pull "{\"model\":\"$model\",\"stream\":false}" 86400 > "$RES/ollama_pull_$name.json" \
+  step "$name: download $model, $MODEL_GB GB (instant when already there; no detail until it ends)"
+  with_beat /dev/null ollama_api pull "{\"model\":\"$model\",\"stream\":false}" 86400 > "$RES/ollama_pull_$name.json" \
     || { note "$name" "failed" "Ollama could not pull $model: $(last_line "$RES/ollama_pull_$name.json")"; return 0; }
   ollama_api generate "{\"model\":\"$model\",\"keep_alive\":0}" >/dev/null || true   # unload, so the load is timed
+  step "$name: load the model onto the GPU"
   t0=$(date +%s)
-  ollama_api generate "{\"model\":\"$model\"}" 3600 >/dev/null \
+  with_beat /dev/null ollama_api generate "{\"model\":\"$model\"}" 3600 >/dev/null \
     || { note "$name" "failed" "Ollama could not load $model"; return 0; }
   load=$(( $(date +%s) - t0 ))
+  step "$name: benchmark"
   if python3 bench.py --name "$name" --url "$OLLAMA_URL/v1" --model "$model" --rounds "$ROUNDS" --load-s "$load" \
        --extra '{"reasoning_effort":"none"}' --out "$RES/bench_$name.json"; then
     note "$name" "runs" "$model"
@@ -176,6 +197,7 @@ strata_step() {
   check "GPU compute capability" "$sm" '^[0-9]+$'
   ! curl -fsS -m 3 "$base/models" >/dev/null 2>&1 || die "port $STRATA_PORT already answers; set another STRATA_PORT"
 
+  step "strata: build the sandbox image"
   RUNTIME=${RUNTIME:-$(for r in docker podman apptainer; do command -v "$r" >/dev/null && { echo "$r"; break; }; done)}
   case ${RUNTIME:-} in
     docker|podman) "$RUNTIME" build -t "$IMAGE" - < Dockerfile ;;
@@ -201,27 +223,31 @@ terminal/engine/strata --version
 ./setup.sh --setup --family $STRATA_FAMILY --model $STRATA_MODEL --context $STRATA_CONTEXT --vision no \\
   --yes --no-start --no-browser --port $STRATA_PORT --data-dir /data
 EOF
-  echo "building Strata $STRATA_COMMIT for sm_$sm and fetching $STRATA_MODEL (log: results/strata_setup.log) ..."
-  if ! ct sh /work/steps.sh > "$RES/strata_setup.log" 2>&1; then
+  step "strata: compile ${STRATA_COMMIT:0:8} for sm_$sm, then download $STRATA_MODEL, $MODEL_GB GB (log: results/strata_setup.log)"
+  if ! with_beat "$RES/strata_setup.log" ct sh /work/steps.sh > "$RES/strata_setup.log" 2>&1; then
     note strata "failed" "build or setup failed at commit ${STRATA_COMMIT:0:8}: $(last_line "$RES/strata_setup.log")"
     return 0
   fi
   run=$(ls -t "$WORK"/Strata/terminal/run-*.sh 2>/dev/null | head -n 1 || true)
   [ -n "$run" ] || { note strata "failed" "setup wrote no run script; see results/strata_setup.log"; return 0; }
 
+  step "strata: start the server and load the model (log: results/strata_server.log)"
   t0=$(date +%s)
+  beat "$RES/strata_server.log" & local b=$!
   CT_EXEC="exec" ct sh "/work/Strata/terminal/$(basename "$run")" > "$RES/strata_server.log" 2>&1 &
   pid=$!
   PIDS="$PIDS $pid"
   until curl -fsS -m 5 "$base/models" >/dev/null 2>&1; do
     if ! kill -0 "$pid" 2>/dev/null || [ $(( $(date +%s) - t0 )) -gt 3600 ]; then
-      kill "$pid" 2>/dev/null || true
+      kill "$pid" "$b" 2>/dev/null || true
       note strata "failed" "server did not come up: $(last_line "$RES/strata_server.log")"
       return 0
     fi
     sleep 3
   done
+  kill "$b" 2>/dev/null || true
   load=$(( $(date +%s) - t0 ))
+  step "strata: benchmark"
   if python3 bench.py --name strata --url "$base" --rounds "$ROUNDS" --load-s "$load" \
        --extra '{"chat_template_kwargs":{"enable_thinking":false}}' --out "$RES/bench_strata.json"; then
     note strata "runs" "commit ${STRATA_COMMIT:0:8}, $STRATA_FAMILY $STRATA_MODEL, built for sm_$sm on $CPU_ARCH (not a platform upstream tests)"
@@ -239,6 +265,7 @@ vllm_step() {
     return 0
   fi
   check VLLM_MODEL "$VLLM_MODEL" '^[A-Za-z0-9._:/-]+$'
+  step "vllm: benchmark"
   if python3 bench.py --name vllm --url "$VLLM_URL" --model "$VLLM_MODEL" --rounds "$ROUNDS" \
        --extra '{"chat_template_kwargs":{"enable_thinking":false}}' --out "$RES/bench_vllm.json"; then
     note vllm "runs" "$VLLM_MODEL"
@@ -247,16 +274,24 @@ vllm_step() {
   fi
 }
 
+O=3; [ -z "${OLLAMA_CURRENT_MODEL:-}" ] || O=6   # steps in the Ollama stage: download, load, benchmark, per model
+case ${1:-all} in
+  preflight|report) TOTAL=2 ;;
+  ollama) TOTAL=$(( O + 2 )) ;;
+  strata) TOTAL=6 ;;
+  vllm)   TOTAL=3 ;;
+  all)    TOTAL=$(( O + 7 )) ;;
+  *) die "unknown step: $1" ;;
+esac
+step "check this node: self-test, disk, GPU"
 python3 bench.py --selftest
 pick_disk
 preflight
 case ${1:-all} in
-  preflight) ;;
-  ollama) ollama_step ;;
-  strata) strata_step ;;
-  vllm)   vllm_step ;;
-  report) ;;
-  all)    ollama_step; strata_step; vllm_step ;;
-  *) die "unknown step: $1" ;;
+  ollama) stage "$O" ollama_step ;;
+  strata) stage 4 strata_step ;;
+  vllm)   stage 1 vllm_step ;;
+  all)    stage "$O" ollama_step; stage 4 strata_step; stage 1 vllm_step ;;
 esac
+step "write results/REPORT.md"
 python3 report.py "$RES"

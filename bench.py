@@ -179,6 +179,7 @@ def main():
 
     chat(base, model, "Reply with the word ready.", 8, extra)  # warm-up: the model is loaded before timing starts
     runs = []
+    total = a.rounds * len(list(prompts()))
     for rnd in range(a.rounds):
         for pid, user, max_tokens, expect in prompts():
             # a fixed nonce per (prompt, round): defeats prefix caches, and is the same for every engine
@@ -189,7 +190,7 @@ def main():
             except Exception as e:  # one failed request must not lose the others
                 row["error"] = f"{type(e).__name__}: {e}"
             runs.append(row)
-            print(f"{a.name} {pid} r{rnd}: " + (row.get("error") or
+            print(f"  request {len(runs)}/{total}: {a.name} {pid} r{rnd}: " + (row.get("error") or
                   f"ttft {row['ttft_s']} s, {row['gen_tps']} tok/s, score {row['score']}"), flush=True)
     stop.set()
     result = {"name": a.name, "url": base, "model": model, "load_s": a.load_s, "rounds": a.rounds,

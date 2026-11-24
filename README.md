@@ -33,14 +33,25 @@ The benchmark client and report generator use the Python standard library only: 
 
 ```sh
 $ ./run_all.sh
+[1/10 09:00:00] check this node: self-test, disk, GPU
 selftest ok
 data folder: /scratch/you/strata-basalt-data (… GiB usable); model: …
 == basalt: cannot run (needs Linux x86-64 and a Blackwell GPU (compute capability 12.0); this node is …)
-ollama long_summary r0: ttft … s, … tok/s, score None
-ollama long_lookup r0: ttft … s, … tok/s, score …
+[2/10 09:00:02] ollama: download …, 111 GB (instant when already there; no detail until it ends)
+      1 min:
+[3/10 …] ollama: load the model onto the GPU
+[4/10 …] ollama: benchmark
+  request 1/18: ollama long_summary r0: ttft … s, … tok/s, score None
+  request 2/18: ollama long_lookup r0: ttft … s, … tok/s, score …
+...
+[6/10 …] strata: compile … for sm_…, then download …, 111 GB (log: results/strata_setup.log)
+      1 min: <newest line of the log>
 ...
 == strata: runs (commit …, built for sm_… on …)
+[10/10 …] write results/REPORT.md
 ```
+
+Every step is numbered. During a long wait, a line each minute shows the minutes spent and the newest line of that step's log.
 
 The run ends by printing `results/REPORT.md`, which has this layout (values elided here, since they depend on your node):
 
