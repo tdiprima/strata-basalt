@@ -90,23 +90,18 @@ On the GPU node: `nvidia-smi`, `python3` (3.10 or newer), `curl`, and one of `do
 
 ### Run it
 
-1. Copy the folder to the node. The default target is the `lala` host of your `~/.ssh/config`.
-
-   ```sh
-   ./push.sh            # or: ./push.sh <host>
-   ```
-
-2. Log in and start the run inside `tmux`. It takes hours: two large downloads plus a build.
+1. Log in and start the run inside `tmux`. It takes hours: two large downloads plus a build.
 
    ```sh
    ssh lala
+   git clone https://github.com/tdiprima/strata-basalt.git
    cd strata-basalt
    tmux new -s bench ./run_all.sh
    ```
 
    Detach with `Ctrl-b d`. Return with `tmux attach -t bench`.
 
-3. Read the result.
+2. Read the result.
 
    ```sh
    cat results/REPORT.md
